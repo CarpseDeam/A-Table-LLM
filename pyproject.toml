@@ -29,7 +29,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/airtable_analyzer"]
+source = ["airtable_analyzer"]
 omit = ["tests/*"]
 
 [tool.coverage.report]

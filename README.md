@@ -88,7 +88,7 @@ print(markdown)
 - Coverage report: `pytest --cov`
 - Static analysis:
   - `flake8`
-  - `mypy src`
+  - `mypy airtable_analyzer`
   - `black --check .`
 
 Tests stub external calls and include an end-to-end flow to guarantee resilience without network access.
@@ -96,7 +96,7 @@ Tests stub external calls and include an end-to-end flow to guarantee resilience
 ## Project Structure
 ```
 .
-├── src/airtable_analyzer/        # Core library code
+├── airtable_analyzer/            # Core library code
 ├── tests/                        # Pytest suite with fixtures and mocks
 ├── examples/                     # Live and mock usage examples
 ├── requirements.txt              # Pinned dependencies
