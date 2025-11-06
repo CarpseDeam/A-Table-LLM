@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from collections import Counter, OrderedDict, defaultdict
 from dataclasses import dataclass
@@ -41,10 +40,6 @@ class ReportMetrics:
     single_select_count: int
     relationship_counter: Counter
     dependencies_by_target: Dict[str, List[str]]
-    complexity_score: float
-    complexity_label: str
-    estimated_time_minutes: int
-    critical_dependencies: List[str]
 
 
 class ReportBuilder:
@@ -223,14 +218,6 @@ class ReportBuilder:
             f"{metrics.relationship_count} relationships"
         )
         lines.append(f"- **Calculated fields:** {calculated_summary}")
-        lines.append(
-            f"- **Complexity:** {metrics.complexity_label} "
-            f"(score {int(round(metrics.complexity_score))})"
-        )
-        lines.append(
-            f"- **Estimated duplication time:** "
-            f"{self._format_time_estimate(metrics.estimated_time_minutes)}"
-        )
         if relationships_by_type:
             lines.append(f"- **Relationships by type:** {relationships_by_type}")
 
@@ -239,12 +226,6 @@ class ReportBuilder:
             lines.append("**Table creation sequence**")
             for index, table_name in enumerate(creation_order, start=1):
                 lines.append(f"{index}. {table_name}")
-
-        if metrics.critical_dependencies:
-            lines.append("")
-            lines.append("**Critical dependencies**")
-            for dependency in metrics.critical_dependencies:
-                lines.append(f"- {dependency}")
 
         if not metrics.relationship_count:
             lines.append("")
@@ -533,26 +514,18 @@ class ReportBuilder:
         sequence_index: int,
     ) -> List[str]:
         lines: List[str] = [f"### Step {step.order}: {step.title}", ""]
-        complexity = self._classify_step_complexity(step)
-        estimated_time = self._estimate_step_time(step, complexity)
-        execution_note = self._build_execution_note(step)
-
-        lines.append(f"- **Complexity:** {complexity}")
-        lines.append(f"- **Estimated time:** {self._format_time_estimate(estimated_time)}")
-        lines.append(f"- **Execution:** {execution_note}")
 
         tasks = self._extract_tasks(step.description)
         if tasks:
-            lines.append("")
             lines.append("Tasks:")
             lines.extend([f"- [ ] {task}" for task in tasks])
+            lines.append("")
 
         if step.description:
-            lines.append("")
             lines.append(step.description.strip())
+            lines.append("")
 
         if step.prerequisites:
-            lines.append("")
             lines.append("**Prerequisites**")
             lines.extend([f"- {item}" for item in step.prerequisites])
 
@@ -600,32 +573,6 @@ class ReportBuilder:
         for rel in relationships:
             dependencies_by_target[rel.to_table_name].append(rel.from_table_name)
 
-        complexity_score = (
-            table_count * 5
-            + field_count * 0.6
-            + relationship_count * 4
-            + formula_count * 6
-            + lookup_count * 4
-            + rollup_count * 4.5
-            + linked_count * 3
-        )
-
-        complexity_label = self._classify_complexity(complexity_score)
-
-        estimated_time_minutes = max(
-            30,
-            int(
-                table_count * 20
-                + field_count * 1.2
-                + relationship_count * 5
-                + formula_count * 8
-                + lookup_count * 6
-                + rollup_count * 6
-            ),
-        )
-
-        critical_dependencies = self._identify_critical_dependencies(dependencies_by_target)
-
         return ReportMetrics(
             table_count=table_count,
             field_count=field_count,
@@ -637,39 +584,7 @@ class ReportBuilder:
             single_select_count=single_select_count,
             relationship_counter=relationship_counter,
             dependencies_by_target=dependencies_by_target,
-            complexity_score=complexity_score,
-            complexity_label=complexity_label,
-            estimated_time_minutes=estimated_time_minutes,
-            critical_dependencies=critical_dependencies,
         )
-    def _classify_complexity(self, score: float) -> str:
-        if score < 60:
-            return "Low"
-        if score < 120:
-            return "Moderate"
-        if score < 180:
-            return "High"
-        return "Very High"
-
-    def _identify_critical_dependencies(
-        self, dependencies_by_target: Dict[str, List[str]]
-    ) -> List[str]:
-        entries: List[Tuple[str, List[str]]] = [
-            (table_name, sources)
-            for table_name, sources in dependencies_by_target.items()
-            if sources
-        ]
-        entries.sort(key=lambda item: len(set(item[1])), reverse=True)
-
-        critical: List[str] = []
-        for table_name, sources in entries:
-            unique_sources = sorted(set(sources))
-            if not unique_sources:
-                continue
-            critical.append(f"{table_name} referenced by {', '.join(unique_sources)}")
-            if len(critical) >= 5:
-                break
-        return critical
 
     def _build_relationship_diagram_lines(
         self, relationships: Sequence[RelationshipSummary]
@@ -940,32 +855,6 @@ class ReportBuilder:
             return formula
         return "configured"
 
-    def _classify_step_complexity(self, step: DuplicationStep) -> str:
-        description = step.description or ""
-        word_count = len(re.findall(r"\w+", description))
-        score = word_count / 12 + len(step.prerequisites) * 0.75
-        if score < 2.5:
-            return "Low"
-        if score < 4.5:
-            return "Moderate"
-        return "High"
-
-    def _estimate_step_time(self, step: DuplicationStep, complexity: str) -> int:
-        description = step.description or ""
-        word_count = len(re.findall(r"\w+", description))
-        base = 20 + word_count * 1.1 + len(step.prerequisites) * 10
-        complexity_bonus = {"Low": 10, "Moderate": 25, "High": 45}.get(complexity, 20)
-        estimate = base + complexity_bonus
-        return max(15, int(math.ceil(estimate / 5.0)) * 5)
-
-    def _build_execution_note(self, step: DuplicationStep) -> str:
-        if not step.prerequisites:
-            return "Parallel-friendly once base access is granted"
-        if len(step.prerequisites) == 1:
-            return f"Sequential - wait for {step.prerequisites[0]}"
-        prereq_list = ", ".join(step.prerequisites)
-        return f"Sequential - depends on {prereq_list}"
-
     def _extract_tasks(self, description: str) -> List[str]:
         if not description:
             return []
@@ -981,15 +870,6 @@ class ReportBuilder:
         spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", field_type)
         spaced = spaced.replace("_", " ")
         return spaced.lower()
-
-    def _format_time_estimate(self, minutes: int) -> str:
-        hours, mins = divmod(minutes, 60)
-        if hours and mins:
-            return f"~{hours} hr {mins} min"
-        if hours:
-            unit = "hr" if hours == 1 else "hrs"
-            return f"~{hours} {unit}"
-        return f"~{minutes} min"
 
     def _describe_formula(self, formula: str) -> str:
         uppercase = formula.upper()
