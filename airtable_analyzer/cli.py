@@ -71,8 +71,15 @@ def analyze(  # pragma: no cover - CLI glue
         report_builder=report_builder,
     )
 
-    report = service.generate_report(output_path=output)
+    report, saved_path = service.generate_report(output_path=output)
+
+    # Print the report to console
     typer.echo(report)
+
+    # Print the saved file location
+    typer.echo(f"\n{'='*60}")
+    typer.echo(f"Report saved to: {saved_path}")
+    typer.echo(f"{'='*60}")
 
 
 def _resolve_settings(

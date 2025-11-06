@@ -40,8 +40,9 @@ def main() -> None:
     )
 
     output_path = Path("reports") / f"{settings.airtable_base_id}_duplication.md"
-    report = service.generate_report(output_path=output_path)
+    report, saved_path = service.generate_report(output_path=output_path)
     print(report)
+    print(f"\nReport saved to: {saved_path}")
 
 
 if __name__ == "__main__":

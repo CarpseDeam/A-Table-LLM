@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from .airtable_client import AirtableClient
 from .config import Settings
@@ -36,26 +37,47 @@ class AirtableAnalysisService:
         self.report_builder = report_builder
         self.logger = logger or LOGGER
 
-    def generate_report(self, output_path: Optional[Path] = None) -> str:
+    def generate_report(self, output_path: Optional[Path] = None) -> Tuple[str, Optional[Path]]:
         """Generate the markdown duplication guide.
 
         Args:
             output_path: Optional path where the markdown report should be written.
+                        If not provided, automatically saves to reports/ directory.
 
         Returns:
-            Markdown document as a string.
+            Tuple of (markdown document as a string, path where report was saved).
         """
         schema = self._fetch_schema(self.settings.airtable_base_id)
         analysis = self._analyze_schema(schema)
         guide = self._invoke_gemini(analysis)
         report = self.report_builder.build_report(schema, analysis, guide)
 
-        if output_path:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(report, encoding="utf-8")
-            self.logger.info("Report written to %s", output_path)
+        # Auto-generate output path if not provided
+        if output_path is None:
+            output_path = self._generate_report_path(schema.id, schema.name)
 
-        return report
+        # Save the report
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report, encoding="utf-8")
+        self.logger.info("Report written to %s", output_path)
+
+        return report, output_path
+
+    def _generate_report_path(self, base_id: str, base_name: str) -> Path:
+        """Generate a timestamped filename for the report.
+
+        Args:
+            base_id: The Airtable base ID.
+            base_name: The Airtable base name.
+
+        Returns:
+            Path object for the report file.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # Sanitize base_name for use in filename
+        safe_base_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in base_name)
+        filename = f"{safe_base_name}_{timestamp}.md"
+        return Path("reports") / filename
 
     def _fetch_schema(self, base_id: str) -> AirtableBaseSchema:
         self.logger.info("Fetching Airtable schema for base %s", base_id)

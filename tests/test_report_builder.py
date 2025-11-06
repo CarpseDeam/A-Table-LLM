@@ -15,6 +15,10 @@ def test_report_builder_generates_markdown(
         guide=sample_duplication_guide,
     )
 
+    assert "## Quick Reference" in report
     assert "## Table Breakdown" in report
-    assert "Projects" in report
-    assert "Duplication Steps" in report
+    assert "## Relationships & Flow" in report
+    assert "### Projects" in report
+    assert "### Tasks" in report
+    assert "- [ ]" in report  # checklists should be present
+    assert "```json" not in report  # simple fields should avoid raw JSON blocks
